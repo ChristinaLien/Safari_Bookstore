@@ -1,0 +1,312 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Web;
+using System.Web.Mvc;
+using System.ComponentModel.DataAnnotations;
+using Team23Project.Models;
+using Team23Project.Utilities;
+
+
+namespace Team23Project.Controllers
+{
+    public class BookController : Controller
+    {
+        private AppDbContext db = new AppDbContext();
+
+        // GET: Book
+        public ActionResult Index()
+        {
+            var book = from b in db.Books
+                       select b;
+
+            book = book.OrderBy(b => b.Title);
+            return View(db.Books.ToList());
+        }
+        // GET: Book
+        public ActionResult IndexE()
+        {
+            var book = from b in db.Books
+                       select b;
+
+            book = book.OrderBy(b => b.Title);
+            return View(db.Books.ToList());
+        }
+
+        //GET: Book/Details/5
+        public ActionResult Details(int? id)
+        {
+            
+                if (id == null)
+                {   
+                    return View("Index");
+                }
+                Book book = db.Books.Find(id);
+                if (book == null)
+                {
+                    return View("Index");
+                }
+                var model = new BookDetailsViewModel
+                {
+                    Book = book,
+                    BookReviews = book.BookReviews.Where(b => b.ApprovalStatus == true)
+                };
+                if (model.BookReviews != null)
+                {
+                    model.AverageRating = BookReview.CalculateAvgRating(model.BookReviews.ToList());
+                }
+                return View(model);
+            }
+        
+            public ActionResult DetailsE(int? id)
+            {
+                if (id == null)
+                {
+                    return View("Index");
+                }
+                Book book = db.Books.Find(id);
+                if (book == null)
+                {
+                    return View("Index");
+                }
+                var model = new BookDetailsViewModel
+               {
+                   Book = book,
+               };
+
+                if (model.BookReviews != null)
+                {
+                    model.AverageRating = BookReview.CalculateAvgRating(model.BookReviews.ToList());
+                }
+
+                return View(model);
+            }
+
+
+            // GET: Members/Create
+            public ActionResult Create()
+            {
+                 BookCreateViewModel newBook = new BookCreateViewModel();
+            ViewBag.AllGenres = UpdateGenres.GetAllGenres(db);
+            ViewBag.AllAuthors = UpdateAuthors.GetAllAuthors(db);
+            return View(newBook);
+             }
+     
+
+           
+            // POST: Members/Create
+            // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
+            // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
+            [HttpPost]
+            [ValidateAntiForgeryToken]
+            public ActionResult Create([Bind(Include = "BookID,UniqueID,Title,AuthorID,Genre,PublicationDate,RegularPrice,InventoryInStock,ReorderPoint")] BookCreateViewModel newBook)
+            {
+
+                
+                if (ModelState.IsValid)
+                {
+                    //Book bookToAdd = newBook.ToDomainModel();
+                    //db.Books.Add(newBook);
+                    db.SaveChanges();
+                    return View("IndexE");
+                }
+
+                return View(newBook);
+
+                            }
+
+        // GET: Books/Edit/5
+        public ActionResult Edit(int? id)
+        {
+            if (id == null)
+            {
+                return new HttpStatusCodeResult(HttpStatusCode.BadRequest);
+            }
+            Book book = db.Books.Find(id);
+            if (book == null)
+            {
+                return HttpNotFound();
+            }
+
+            BookCreateViewModel newBook = new BookCreateViewModel();
+            
+            return View(newBook);
+        }
+
+        // POST: Books/Edit/5
+        // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
+        // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Edit([Bind(Include = "BookID,Title,GenreName,SelectedArtist,AuthorID, RegularPrice, Discount, InventoryInStock, PublicationDate, ReorderPoint")] BookCreateViewModel BookEditViewModel)
+        {
+            if (ModelState.IsValid) //checks the state of the view model
+            {
+                
+                Book originalBook = db.Books.Find(BookEditViewModel.BookID);
+                return RedirectToAction("Index");
+            }
+
+            return View(BookEditViewModel);
+        }
+
+     
+        //POST: Advanced Search
+        public ActionResult Search(string searchTitle, int? UniqueNumber, string FName, string LName, string searchGenre, SortType? sortType, bool? InStock)
+        {
+            var book = from b in db.Books
+                       select b;
+
+
+            if (String.IsNullOrEmpty(searchTitle) == false) //customer entered in a title to search
+            {
+                book = book.Where(b => b.Title.Contains(searchTitle));
+            }
+
+            if (String.IsNullOrEmpty(FName) == false) //there is something to search for in artist first name
+            {
+                book = book.Where(b => b.AuthorID.FName.Contains(FName));
+            }
+
+            if (String.IsNullOrEmpty(LName) == false) //there is something to search for in artist last name
+            {
+                book = book.Where(b => b.AuthorID.LName.Contains(LName));
+            }
+
+            if (UniqueNumber != null && UniqueNumber != -1) //there is something to search for in unique number
+            {
+                book = book.Where(b => b.UniqueID == UniqueNumber);
+            }
+
+            if (String.IsNullOrEmpty(searchGenre) == false) //there is something to search for in genre
+            {
+                book = book.Where(b => b.Genre.GenreName == searchGenre);
+            }
+
+
+            if (InStock == true)
+                book = book.Where(b => b.InventoryInStock > 0);
+
+
+
+            if (sortType == SortType.Author)
+            {
+                book = book.OrderBy(b => b.AuthorID.LName);
+                return View(book.ToList());
+            }
+
+            else if (sortType == SortType.HighestRated) //need to edit
+            {
+                book = book.OrderBy(b => b.BookReviews);
+                return View(book.ToList());
+            }
+            else if (sortType == SortType.MostPopular)
+            {
+                book = book.OrderByDescending(b => b.QuantitySold);
+                return View(book.ToList());
+            }
+            else if (sortType == SortType.NewesttoOldest)
+            {
+                book = book.OrderByDescending(b => b.PublicationDate);
+                return View(book.ToList());
+            }
+            else if (sortType == SortType.OldesttoNewest)
+            {
+                book = book.OrderBy(b => b.PublicationDate);
+                return View(book.ToList());
+            }
+            else if (sortType == SortType.Title)
+            {
+                book = book.OrderBy(b => b.Title);
+                return View(book.ToList());
+            }
+            else
+            {
+                book = book.OrderBy(b => b.Title);
+                return View(book.ToList());
+            }
+        }
+
+
+            public ActionResult SearchE(string searchTitle, int? UniqueNumber, string FName, string LName, string searchGenre, SortType? sortType, bool? InStock)
+        {
+            var book = from b in db.Books
+                       select b;
+           
+            
+            if (String.IsNullOrEmpty(searchTitle) == false) //customer entered in a title to search
+            {
+                book = book.Where(b => b.Title.Contains(searchTitle));
+            }
+
+            
+            if (String.IsNullOrEmpty(FName) == false) //there is something to search for in artist first name
+            {
+                book = book.Where(b => b.AuthorID.FName.Contains(FName));
+            }
+
+            if (String.IsNullOrEmpty(LName) == false) //there is something to search for in artist last name
+            {
+                book = book.Where(b => b.AuthorID.LName.Contains(LName));
+            }
+
+            if (UniqueNumber != null && UniqueNumber != -1) //there is something to search for in unique number
+            {
+                book = book.Where(b => b.UniqueID == UniqueNumber);
+            }
+
+            if (String.IsNullOrEmpty(searchGenre) == false) //there is something to search for in genre
+            {
+                book = book.Where(b => b.Genre.GenreName == searchGenre);
+            }
+
+
+            if (InStock == true)
+                book = book.Where(b => b.InventoryInStock > 0);
+            
+
+           
+            if (sortType == SortType.Author)
+            {
+               book = book.OrderBy(b => b.AuthorID.LName);
+                return View(book.ToList());
+            }
+
+            else if (sortType == SortType.HighestRated) //need to edit
+            {
+                book = book.OrderBy(b => b.BookReviews);
+                return View(book.ToList());
+            }
+            else if (sortType == SortType.MostPopular)
+            {
+                book = book.OrderByDescending(b => b.QuantitySold);
+                return View(book.ToList());
+            }
+            else if (sortType == SortType.NewesttoOldest)
+            {
+                book = book.OrderByDescending(b => b.PublicationDate);
+                return View(book.ToList());
+            }
+            else if (sortType == SortType.OldesttoNewest)
+            {
+                book = book.OrderBy(b => b.PublicationDate);
+                return View(book.ToList());
+            }
+            else if (sortType == SortType.Title)
+            {
+                book = book.OrderBy(b => b.Title);
+                return View(book.ToList());
+            }
+            else
+            {
+                book = book.OrderBy(b => b.Title);
+                return View(book.ToList());
+            }
+
+
+        }
+        
+    
+    }
+  }
